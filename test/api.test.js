@@ -1,14 +1,12 @@
 process.env.NODE_ENV = 'test';
 const mongoose = require('mongoose');
 const chai = require('chai');
-const chaiHttp = require('chai-http');
 const request = require('supertest');
 const app = require('../app');
 const User = require('../models/User')
 const Dog = require('../models/Dog');
 const Adoption = require('../models/Adoption');
 
-chai.use(chaiHttp);
 const { expect } = chai;
 
 describe('Dog Adoption API', function () {
@@ -94,7 +92,8 @@ describe('Dog Adoption API', function () {
             .set('Authorization', `Bearer ${authTokenUserB}`)
             .expect(200);
         expect(res.body.total).to.equal(1);
-        expect(res.body.dogs[0]._id).to.equal(dogId);
+        expect(res.body.adoptedDogs).to.be.an('array');
+        expect(res.body.adoptedDogs[0]._id.toString()).to.equal(dogId.toString());
     });
 });
 
@@ -124,7 +123,7 @@ describe('Dog Adoption API - Edge Cases', function () {
         const dogRes = await request(app)
             .post('/dogs')
             .set('Authorization', `Bearer ${authTokenUserA}`)
-            .send({ name: 'Rover', description: 'Friendly pup' });
+            .send({ name: 'EdgeCaseDog', description: 'Fresh dog' });
         dogId = dogRes.body.dog._id;
     });
 
@@ -154,11 +153,11 @@ describe('Dog Adoption API - Edge Cases', function () {
 
     it('should not allow adopting an already adopted dog', async function () {
         const res = await request(app)
-            .post(`/dog/${dogId}/adopt`)
+            .post(`/dogs/${dogId}/adopt`)
             .set('Authorization', `Bearer ${authTokenUserA}`)
             .send({ thankYouMessage: 'Trying to adopt again' })
-            .expect(403);
-        expect(res.body.error).to.match(/already adopted/i);
+            .expect(400);
+        expect(res.body.error).to.match(/not available/i);
     });
 
     it('should not allow owner to remove an adopted dog', async function () {
@@ -168,5 +167,5 @@ describe('Dog Adoption API - Edge Cases', function () {
             .expect(400)
         expect(res.body.error).to.match(/cannot remove/i);
     });
-    
+
 });
