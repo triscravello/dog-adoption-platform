@@ -28,13 +28,13 @@ describe('Dog Adoption API', function () {
     });
 
     after(async function() {
-        await mongoose.connect.close();
+        await mongoose.connection.close();
     });
 
     it('registers user A', async function() {
         const res = await request(app)
             .post('/auth/register')
-            .send({ username: 'userA', password: 'passA' })
+            .send({ username: 'userA', password: 'passA123' })
             .expect(201);
         expect(res.body).to.have.property('token');
         authTokenUserA = res.body.token;
@@ -44,7 +44,7 @@ describe('Dog Adoption API', function () {
     it('registers user B', async function () {
         const res = await request(app)
             .post('/auth/register')
-            .send({ username: 'userB', password: 'passB' })
+            .send({ username: 'userB', password: 'passB123' })
             .expect(201);
         authTokenUserB = res.body.token;
         userB = res.body.user;
@@ -63,7 +63,7 @@ describe('Dog Adoption API', function () {
 
     it('user A cannot adopt their own dog', async function () {
         const res = await request (app)
-            .post(`/dog/${dogId}/adopt`)
+            .post(`/dogs/${dogId}/adopt`)
             .set('Authorization', `Bearer ${authTokenUserA}`)
             .send({ thankYouMessage: 'I love you' })
             .expect(403);
@@ -98,4 +98,75 @@ describe('Dog Adoption API', function () {
     });
 });
 
-describe('Dog Adoption API - Edge Cases', function () {});
+describe('Dog Adoption API - Edge Cases', function () {
+    let authTokenUserA;
+    let authTokenUserB;
+    let userA;
+    let userB;
+    let dogId;
+
+    before(async function() {
+        await mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+        await User.deleteMany();
+        await Dog.deleteMany();
+        await Adoption.deleteMany();
+
+        // Register users
+        const resA = await request(app).post('/auth/register').send({ username: 'userA', password: 'passA123' });
+        authTokenUserA = resA.body.token;
+        userA = resA.body.user;
+
+        const resB = await request(app).post('/auth/register').send({ username: 'userB', password: 'passB123' });
+        authTokenUserB = resB.body.token;
+        userB = resB.body.user;
+
+        // User A creates a dog
+        const dogRes = await request(app)
+            .post('/dogs')
+            .set('Authorization', `Bearer ${authTokenUserA}`)
+            .send({ name: 'Rover', description: 'Friendly pup' });
+        dogId = dogRes.body.dog._id;
+    });
+
+    after(async function () {
+        await mongoose.connection.close();
+    });
+
+    it('should not allow adoption a non-existent dog', async function () {
+        const fakeDogId = '000000000000000000000000'; // valid ObjectId format, but doesn't exist
+        const res = await request(app)
+            .post(`/dogs/${fakeDogId}/adopt`)
+            .set('Authorization', `Bearer ${authTokenUserB}`)
+            .send({ thankYouMessage: 'I want a ghost dog!' })
+            .expect(404);
+        expect(res.body.error).to.match(/not found/i);
+    });
+
+    it('should allow user B to adopt the dog', async function () {
+        const res = await request(app)
+            .post(`/dogs/${dogId}/adopt`)
+            .set('Authorization', `Bearer ${authTokenUserB}`)
+            .send({ thankYouMessage: 'Thanks Rover!' })
+            .expect(200);
+        expect(res.body.dog.status).to.equal('adopted');
+        expect(res.body.dog.adopter.toString()).to.equal(userB._id.toString());
+    });
+
+    it('should not allow adopting an already adopted dog', async function () {
+        const res = await request(app)
+            .post(`/dog/${dogId}/adopt`)
+            .set('Authorization', `Bearer ${authTokenUserA}`)
+            .send({ thankYouMessage: 'Trying to adopt again' })
+            .expect(403);
+        expect(res.body.error).to.match(/already adopted/i);
+    });
+
+    it('should not allow owner to remove an adopted dog', async function () {
+        const res = await request(app)
+            .delete(`/dogs/${dogId}`)
+            .set('Authorization', `Bearer ${authTokenUserA}`)
+            .expect(400)
+        expect(res.body.error).to.match(/cannot remove/i);
+    });
+    
+});
