@@ -31,7 +31,7 @@ async function adoptDog (req, res) {
         if (!dog) return res.status(404).json({ error: 'Dog not found' });
 
         if (dog.status !== Dog.STATUSES.AVAILABLE) {
-            res.status(400).json({ error: 'Dog is not available for adoption '});
+            return res.status(400).json({ error: 'Dog is not available for adoption '});
         }
 
         if (dog.owner.toString() == req.user._id.toString()) {
@@ -78,7 +78,7 @@ async function removeDog(req, res) {
         res.json({ message: 'Dog removed', dog });
     } catch (err) {
         console.error(err);
-        res.statis(500).json({ error: 'Error removing dog' });
+        res.status(500).json({ error: 'Error removing dog' });
     }
 }
 
@@ -90,12 +90,12 @@ async function listRegisteredDogs(req, res) {
         const filter = { owner: req.user._id };
         if (status) filter.status = status;
 
-        const [dog, total] = await Promise.all([
+        const [dogs, total] = await Promise.all([
             Dog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
             Dog.countDocuments(filter),
         ]);
 
-        res.json({ page, limit, total, dog });
+        res.json({ page, limit, total, dogs });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Error listing registered dogs' });
@@ -108,12 +108,12 @@ async function listAdoptedDogs(req, res) {
 
         const filter = { adopter: req.user._id };
 
-        const [dog, total] = await Promise.all([
+        const [adoptedDogs, total] = await Promise.all([
             Dog.find(filter).sort({ adoptedAt: -1 }).skip(skip).limit(limit),
             Dog.countDocuments(filter),
         ]);
 
-        res.json({ page, limit, total, dog });
+        res.json({ total, adoptedDogs });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Error listing adopted dogs' });
